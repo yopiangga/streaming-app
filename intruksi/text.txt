@@ -1,0 +1,149 @@
+Build a **real-time video streaming platform** with the following architecture and requirements:
+
+## 🧩 Tech Stack
+
+* **Frontend (Client & Admin):** React.js (with Vite)
+* **Backend:** Node.js with Express.js
+* **WebRTC:** mediasoup or simple-peer (preferred: mediasoup for scalability)
+* **Styling:** Tailwind CSS
+* **State Management:** Zustand or Redux Toolkit
+* **Realtime Signaling:** Socket.IO
+
+---
+
+## 🎯 Core Concept
+
+There are 2 roles:
+
+1. **Client (Streamer)** → multiple users sending live video
+2. **Admin (Viewer Dashboard)** → monitors multiple live streams simultaneously (up to 2 devices)
+
+---
+
+## 📱 CLIENT APP (Mobile-first, TikTok Live Style)
+
+Design a mobile-first UI that mimics TikTok Live experience:
+
+* Fullscreen vertical video (9:16 aspect ratio)
+* Camera preview before going live
+* Button: "Go Live"
+* Live indicator (🔴 LIVE badge)
+* Viewer count (mocked or realtime)
+* Chat overlay (floating comments, optional)
+* Smooth UI transitions
+
+### Features:
+
+* Access camera & microphone
+* Start/Stop live streaming
+* Send stream to server using WebRTC
+* Automatically reconnect if connection drops
+* Show connection status (Connecting, Live, Disconnected)
+
+---
+
+## 🖥️ ADMIN DASHBOARD
+
+Responsive dashboard to monitor all live streams:
+
+* Grid layout of active streams (like CCTV monitoring)
+* Each stream card contains:
+
+  * Video player
+  * Client ID / name
+  * Status (Live / Offline)
+* Ability to:
+
+  * View multiple streams simultaneously
+  * Expand one stream to fullscreen
+  * See total active streams
+* Support up to 2 admin devices watching simultaneously
+
+---
+
+## ⚙️ BACKEND (Express.js)
+
+### Responsibilities:
+
+* WebRTC signaling server (via Socket.IO)
+* Manage rooms/sessions for each client stream
+* Handle multiple clients streaming concurrently
+* Maintain mapping:
+
+  * client_id → stream
+  * admin subscribers → stream viewers
+
+### Features:
+
+* REST API:
+
+  * POST /start-stream
+  * POST /stop-stream
+  * GET /streams (active streams list)
+* WebSocket events:
+
+  * "join-stream"
+  * "offer"
+  * "answer"
+  * "candidate"
+* Handle reconnection & cleanup on disconnect
+
+---
+
+## 🔥 ADVANCED (IMPORTANT)
+
+* Use **mediasoup** for SFU (Selective Forwarding Unit)
+* Optimize for low latency
+* Ensure scalability for multiple clients
+* Handle bandwidth efficiently
+* Add basic logging
+
+---
+
+## 📂 PROJECT STRUCTURE
+
+monorepo:
+
+* /client-app (React - streamer UI)
+* /admin-app (React - dashboard)
+* /server (Express + WebRTC signaling)
+
+---
+
+## 🎨 UI/UX REQUIREMENTS
+
+### Client:
+
+* TikTok Live inspired UI
+* Dark mode
+* Minimal controls
+* Smooth animations
+
+### Admin:
+
+* Clean dashboard (similar to surveillance system)
+* Grid system (responsive)
+* Use cards with shadows and rounded corners
+
+---
+
+## 🚀 BONUS (if possible)
+
+* Record stream (optional)
+* Add authentication (JWT)
+* Add stream thumbnail preview
+* Add simple chat system
+
+---
+
+## 📦 OUTPUT EXPECTATION
+
+* Fully working project (frontend + backend)
+* Clean, modular, scalable code
+* Clear instructions to run (README)
+* Environment variables example (.env)
+
+---
+
+Focus on **real-time performance, clean architecture, and scalability**.
+Avoid unnecessary complexity, but ensure production-ready structure.

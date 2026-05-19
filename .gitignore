@@ -1,0 +1,8 @@
+
+
+dists
+node_modules
+.env.local
+.env
+*.log
+*.lock
