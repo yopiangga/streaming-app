@@ -1,10 +1,20 @@
 import * as mediasoup from 'mediasoup';
+import dotenv from 'dotenv';
+import fs from 'fs';
+
+dotenv.config();
+if (fs.existsSync('.env.local')) {
+  const envConfig = dotenv.parse(fs.readFileSync('.env.local'));
+  for (const k in envConfig) {
+    process.env[k] = envConfig[k];
+  }
+}
 
 const config = {
   // Worker settings
   worker: {
-    rtcMinPort: 10000,
-    rtcMaxPort: 10100,
+    rtcMinPort: parseInt(process.env.MEDIASOUP_MIN_PORT || '10000', 10),
+    rtcMaxPort: parseInt(process.env.MEDIASOUP_MAX_PORT || '10100', 10),
     logLevel: 'warn',
     logTags: [
       'info',

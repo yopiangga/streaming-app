@@ -1,7 +1,8 @@
 
 
 dists
-dist
+admin-app/dist
+client-app/dist
 node_modules
 .env.local
 .env

@@ -37,7 +37,7 @@ const startServer = async () => {
     worker = await createWorker();
     router = await createRouter();
 
-    handleSignaling(io, router);
+    handleSignaling(io, router  );
 
     app.get("/streams", (req, res) => {
       // Logic to get active streams is handled via socket,
