@@ -3,6 +3,7 @@
 dists
 admin-app/dist
 client-app/dist
+screen-app/dist
 node_modules
 .env.local
 .env
