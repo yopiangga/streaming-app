@@ -46,7 +46,7 @@ const StreamCard = ({ streamInfo }) => {
   }, [streamInfo.stream]);
 
   return (
-    <div className={`relative group bg-zinc-900 rounded-xl overflow-hidden border border-white/5 shadow-xl transition-all hover:border-white/20 ${isFullscreen ? 'fixed inset-0 z-50 rounded-none flex items-center justify-center bg-black' : 'aspect-[9/16]'}`}>
+    <div className={`relative group bg-zinc-900 rounded-xl overflow-hidden border border-white/5 shadow-xl transition-all hover:border-white/20 ${isFullscreen ? 'fixed inset-0 z-50 rounded-none flex items-center justify-center bg-black' : 'aspect-video'}`}>
       {/* Video Player */}
       <video
         key={streamInfo.producerId}
@@ -189,7 +189,7 @@ function App() {
 
         {/* Monitoring Grid */}
         {activeStreams.filter(s => s.kind === 'video').length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {activeStreams.filter(s => s.kind === 'video').map((stream) => (
               <StreamCard key={stream.producerId} streamInfo={stream} />
             ))}
