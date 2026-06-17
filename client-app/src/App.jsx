@@ -5,7 +5,7 @@ import { useMediasoup } from './hooks/useMediasoup';
 
 function App() {
   const videoRef = useRef(null);
-  const { isLive, stream, status, viewerCount } = useStreamStore();
+  const { isLive, stream, status, viewerCount, streamerName, setStreamerName } = useStreamStore();
   const { startStream, stopStream, switchCamera } = useMediasoup();
 
   useEffect(() => {
@@ -40,10 +40,10 @@ function App() {
           <div className="flex gap-2">
             <div className="bg-black/40 backdrop-blur-md rounded-full p-1 pl-1 pr-3 flex items-center gap-2 border border-white/10">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-500 flex items-center justify-center text-xs font-bold">
-                U
+                {(streamerName || 'U').charAt(0).toUpperCase()}
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] font-bold leading-tight">User Streamer</span>
+                <span className="text-[10px] font-bold leading-tight">{streamerName || 'User Streamer'}</span>
                 <span className="text-[9px] text-zinc-300 leading-tight flex items-center gap-1">
                   <Users size={8} /> {viewerCount}
                 </span>
@@ -120,10 +120,24 @@ function App() {
         {/* Center Go Live Button */}
         {!isLive && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/40 backdrop-blur-sm">
+            <div className="w-full px-10 mb-8">
+              <label className="block text-xs font-semibold text-zinc-300 mb-2 text-center">
+                Enter your name to go live
+              </label>
+              <input
+                type="text"
+                value={streamerName}
+                onChange={(e) => setStreamerName(e.target.value)}
+                placeholder="Your name"
+                maxLength={30}
+                className="w-full bg-black/40 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5 text-center text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-pink-500 transition-colors"
+              />
+            </div>
+
             <button
               onClick={startStream}
-              disabled={status === 'Connecting'}
-              className="group relative flex flex-col items-center gap-4 transition-transform active:scale-95"
+              disabled={status === 'Connecting' || !streamerName.trim()}
+              className="group relative flex flex-col items-center gap-4 transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <div className="w-20 h-20 bg-pink-600 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(219,39,119,0.5)] group-hover:bg-pink-500 transition-all">
                 <Video size={36} />

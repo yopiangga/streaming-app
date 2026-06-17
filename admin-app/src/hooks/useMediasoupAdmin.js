@@ -112,7 +112,7 @@ export const useMediasoupAdmin = () => {
     });
   };
 
-  const consumeStream = async ({ socketId, producerId, kind }) => {
+  const consumeStream = async ({ socketId, producerId, kind, streamerName }) => {
     try {
       // Ensure device is loaded
       while (isLoadingDeviceRef.current) {
@@ -176,6 +176,7 @@ export const useMediasoupAdmin = () => {
             socketId,
             producerId,
             kind,
+            streamerName,
             stream,
             consumer,
           });

@@ -124,6 +124,12 @@ export const useMediasoup = () => {
 
   const startStream = async () => {
     try {
+      const streamerName = useStreamStore.getState().streamerName?.trim();
+      if (!streamerName) {
+        console.warn("Streamer name is required before going live.");
+        return;
+      }
+
       setStatus("Connecting");
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -148,12 +154,14 @@ export const useMediasoup = () => {
       if (videoTrack) {
         videoProducerRef.current = await producerTransportRef.current.produce({
           track: videoTrack,
+          appData: { streamerName },
         });
       }
 
       if (audioTrack) {
         audioProducerRef.current = await producerTransportRef.current.produce({
           track: audioTrack,
+          appData: { streamerName },
         });
       }
 

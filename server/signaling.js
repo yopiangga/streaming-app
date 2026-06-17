@@ -74,10 +74,11 @@ export const handleSignaling = (io, router) => {
         callback({ id: producer.id });
 
         // Notify admins about new stream
-        io.emit('new-stream', { 
-          socketId: socket.id, 
+        io.emit('new-stream', {
+          socketId: socket.id,
           producerId: producer.id,
-          kind: producer.kind
+          kind: producer.kind,
+          streamerName: producer.appData?.streamerName || null
         });
       }
     });
@@ -141,7 +142,8 @@ export const handleSignaling = (io, router) => {
             activeStreams.push({
               socketId,
               producerId: p.id,
-              kind: p.kind
+              kind: p.kind,
+              streamerName: p.appData?.streamerName || null
             });
           });
         }

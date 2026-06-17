@@ -96,7 +96,7 @@ const StreamCard = ({ streamInfo }) => {
             <User size={12} className="text-zinc-400" />
           </div>
           <div className="flex flex-col">
-            <span className="text-[10px] text-zinc-300">Streamer Name</span>
+            <span className="text-[10px] text-zinc-300">{streamInfo.streamerName || 'Unknown Streamer'}</span>
             <span className="text-[9px] text-zinc-500 uppercase tracking-tighter">720p • 30fps</span>
           </div>
         </div>

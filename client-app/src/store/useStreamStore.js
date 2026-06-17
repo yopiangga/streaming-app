@@ -7,8 +7,10 @@ const useStreamStore = create((set) => ({
   viewerCount: 0,
   socketId: null,
   facingMode: 'user',
+  streamerName: '',
 
   setLive: (isLive) => set({ isLive }),
+  setStreamerName: (name) => set({ streamerName: name }),
   setStream: (stream) => set({ stream }),
   setStatus: (status) => set({ status }),
   setViewerCount: (count) => set({ viewerCount: count }),
