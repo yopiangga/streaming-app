@@ -8,6 +8,43 @@ const StreamCard = ({ streamInfo }) => {
   const containerRef = useRef(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+
+  // Pantau ukuran kontainer agar video portrait bisa diputar pas mengisi frame landscape
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) {
+        const { width, height } = e.contentRect;
+        setSize({ w: width, h: height });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Deteksi orientasi sumber video saat metadata tersedia
+  const detectOrientation = () => {
+    const v = videoRef.current;
+    if (v && v.videoWidth && v.videoHeight) {
+      setIsPortrait(v.videoHeight > v.videoWidth);
+    }
+  };
+
+  // Jika sumber portrait, putar 90° dan tukar dimensi agar memenuhi sel landscape
+  const forceLandscape = isPortrait && size.w > 0 && size.h > 0;
+  const videoStyle = forceLandscape
+    ? {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        width: `${size.h}px`,
+        height: `${size.w}px`,
+        transform: 'translate(-50%, -50%) rotate(90deg)',
+      }
+    : undefined;
 
   // Gunakan Fullscreen API browser agar window benar-benar memenuhi layar
   const toggleFullscreen = () => {
@@ -53,6 +90,7 @@ const StreamCard = ({ streamInfo }) => {
     video.srcObject = stream;
 
     const handleLoaded = () => {
+      detectOrientation();
       video.play()
         .then(() => {
           setIsVideoPlaying(true);
@@ -78,8 +116,9 @@ const StreamCard = ({ streamInfo }) => {
         autoPlay
         muted
         playsInline
-        onLoadedMetadata={() => setIsVideoPlaying(true)}
-        className={`w-full h-full bg-black transition-opacity duration-700 ${isVideoPlaying ? 'opacity-100' : 'opacity-0'} object-contain`}
+        onLoadedMetadata={() => { setIsVideoPlaying(true); detectOrientation(); }}
+        style={videoStyle}
+        className={`bg-black transition-opacity duration-700 ${isVideoPlaying ? 'opacity-100' : 'opacity-0'} ${forceLandscape ? 'object-cover' : 'w-full h-full object-contain'}`}
       />
 
       {/* Loading State */}
