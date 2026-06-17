@@ -97,7 +97,11 @@ const StreamCard = ({ streamInfo }) => {
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] text-zinc-300">{streamInfo.streamerName || 'Unknown Streamer'}</span>
-            <span className="text-[9px] text-zinc-500 uppercase tracking-tighter">720p • 30fps</span>
+            <span className="text-[9px] text-zinc-500 uppercase tracking-tighter">
+              {streamInfo.latitude != null && streamInfo.longitude != null
+                ? `${streamInfo.latitude.toFixed(5)}, ${streamInfo.longitude.toFixed(5)}`
+                : 'Location N/A'}
+            </span>
           </div>
         </div>
         <Activity size={14} className="text-green-500 animate-pulse" />

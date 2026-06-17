@@ -132,6 +132,26 @@ export const useMediasoup = () => {
 
       setStatus("Connecting");
 
+      // Try to get the streamer's geolocation (non-blocking on failure)
+      const location = await new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({ latitude: null, longitude: null });
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) =>
+            resolve({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            }),
+          (err) => {
+            console.warn("Geolocation unavailable:", err.message);
+            resolve({ latitude: null, longitude: null });
+          },
+          { enableHighAccuracy: true, timeout: 10000 },
+        );
+      });
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -154,14 +174,14 @@ export const useMediasoup = () => {
       if (videoTrack) {
         videoProducerRef.current = await producerTransportRef.current.produce({
           track: videoTrack,
-          appData: { streamerName },
+          appData: { streamerName, ...location },
         });
       }
 
       if (audioTrack) {
         audioProducerRef.current = await producerTransportRef.current.produce({
           track: audioTrack,
-          appData: { streamerName },
+          appData: { streamerName, ...location },
         });
       }
 

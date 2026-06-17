@@ -78,7 +78,9 @@ export const handleSignaling = (io, router) => {
           socketId: socket.id,
           producerId: producer.id,
           kind: producer.kind,
-          streamerName: producer.appData?.streamerName || null
+          streamerName: producer.appData?.streamerName || null,
+          latitude: producer.appData?.latitude ?? null,
+          longitude: producer.appData?.longitude ?? null
         });
       }
     });
@@ -143,7 +145,9 @@ export const handleSignaling = (io, router) => {
               socketId,
               producerId: p.id,
               kind: p.kind,
-              streamerName: p.appData?.streamerName || null
+              streamerName: p.appData?.streamerName || null,
+              latitude: p.appData?.latitude ?? null,
+              longitude: p.appData?.longitude ?? null
             });
           });
         }
