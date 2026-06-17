@@ -1,12 +1,36 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LayoutGrid, Maximize2, Shield, Signal, Video, User, Activity, MoreVertical, Search, Bell } from 'lucide-react';
+import { LayoutGrid, Maximize2, Shield, Signal, Video, User, Activity, MoreVertical, PanelLeft } from 'lucide-react';
 import useAdminStore from './store/useAdminStore';
 import { useMediasoupAdmin } from './hooks/useMediasoupAdmin';
 
 const StreamCard = ({ streamInfo }) => {
   const videoRef = useRef(null);
+  const containerRef = useRef(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Gunakan Fullscreen API browser agar window benar-benar memenuhi layar
+  const toggleFullscreen = () => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(err =>
+        console.error("Gagal masuk fullscreen:", err)
+      );
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
+
+  // Sinkronkan state dengan perubahan fullscreen (termasuk tombol ESC)
+  useEffect(() => {
+    const handleChange = () => {
+      setIsFullscreen(document.fullscreenElement === containerRef.current);
+    };
+    document.addEventListener('fullscreenchange', handleChange);
+    return () => document.removeEventListener('fullscreenchange', handleChange);
+  }, []);
 
   // useEffect(() => {
   //   console.log("Received stream info for:", streamInfo.socketId);
@@ -46,7 +70,7 @@ const StreamCard = ({ streamInfo }) => {
   }, [streamInfo.stream]);
 
   return (
-    <div className={`relative group bg-zinc-900 rounded-xl overflow-hidden border border-white/5 shadow-xl transition-all hover:border-white/20 ${isFullscreen ? 'fixed inset-0 z-50 rounded-none flex items-center justify-center bg-black' : 'aspect-video'}`}>
+    <div ref={containerRef} className={`relative group bg-zinc-900 overflow-hidden border border-white/5 shadow-xl transition-all hover:border-white/20 ${isFullscreen ? 'rounded-none flex items-center justify-center bg-black' : 'w-full h-full min-h-0 rounded-xl'}`}>
       {/* Video Player */}
       <video
         key={streamInfo.producerId}
@@ -55,7 +79,7 @@ const StreamCard = ({ streamInfo }) => {
         muted
         playsInline
         onLoadedMetadata={() => setIsVideoPlaying(true)}
-        className={`w-full h-full bg-black transition-opacity duration-700 ${isVideoPlaying ? 'opacity-100' : 'opacity-0'} ${isFullscreen ? 'object-contain' : 'object-cover'}`}
+        className={`w-full h-full bg-black transition-opacity duration-700 ${isVideoPlaying ? 'opacity-100' : 'opacity-0'} object-contain`}
       />
 
       {/* Loading State */}
@@ -78,7 +102,7 @@ const StreamCard = ({ streamInfo }) => {
         </div>
         <div className="flex gap-1">
           <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
+            onClick={toggleFullscreen}
             className="p-1.5 bg-black/40 hover:bg-white/10 rounded-md backdrop-blur-sm transition-colors text-white"
           >
             <Maximize2 size={14} />
@@ -110,7 +134,7 @@ const StreamCard = ({ streamInfo }) => {
       {/* Close Fullscreen Button */}
       {isFullscreen && (
         <button
-          onClick={() => setIsFullscreen(false)}
+          onClick={toggleFullscreen}
           className="absolute top-4 right-4 p-3 bg-black/60 hover:bg-red-600 rounded-full text-white z-[60] transition-colors"
         >
           <Maximize2 size={24} className="rotate-45" />
@@ -127,10 +151,22 @@ function App() {
   const { activeStreams, status } = useAdminStore();
   const { consumeStream } = useMediasoupAdmin();
 
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const videoStreams = activeStreams.filter(s => s.kind === 'video');
+  const count = videoStreams.length;
+
+  // Layout penuh: 1 stream = full, 2 stream = dibagi 2, sisanya grid otomatis
+  const gridColsClass =
+    count <= 1 ? 'grid-cols-1' :
+    count === 2 ? 'grid-cols-1 lg:grid-cols-2' :
+    count <= 4 ? 'grid-cols-1 lg:grid-cols-2' :
+    'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3';
+
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex flex-col font-sans">
+    <div className="h-screen overflow-hidden bg-black text-zinc-100 flex flex-col font-sans">
       {/* Sidebar (Desktop) */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-zinc-950 border-r border-white/5 hidden xl:flex flex-col p-6 gap-8">
+      <aside className={`fixed left-0 top-0 bottom-0 w-64 bg-zinc-950 border-r border-white/5 z-40 flex-col p-6 gap-8 transition-transform duration-300 ${sidebarOpen ? 'flex translate-x-0' : 'flex -translate-x-full'}`}>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <Shield size={22} className="text-white" />
@@ -167,34 +203,20 @@ function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 xl:ml-64 flex flex-col p-6 md:p-10 gap-8">
-        {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Live Streams</h2>
-            <p className="text-zinc-500 mt-1">Monitoring {activeStreams.filter(s => s.kind === 'video').length} active sessions globally.</p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
-              <input
-                type="text"
-                placeholder="Search streams..."
-                className="bg-zinc-900 border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-64"
-              />
-            </div>
-            <button className="p-2.5 bg-zinc-900 border border-white/5 rounded-xl hover:bg-zinc-800 transition-colors relative text-zinc-400">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2.5 w-2 h-2 bg-pink-500 rounded-full border-2 border-zinc-900"></span>
-            </button>
-          </div>
-        </header>
+      <main className={`relative flex-1 min-h-0 flex flex-col p-3 gap-3 transition-[margin] duration-300 ${sidebarOpen ? 'xl:ml-64' : 'ml-0'}`}>
+        {/* Toggle sidebar mengambang */}
+        <button
+          onClick={() => setSidebarOpen(v => !v)}
+          className="absolute top-4 left-4 z-30 p-2.5 bg-zinc-900/80 backdrop-blur border border-white/5 rounded-xl hover:bg-zinc-800 transition-colors text-zinc-400"
+          title={sidebarOpen ? 'Sembunyikan sidebar' : 'Tampilkan sidebar'}
+        >
+          <PanelLeft size={20} />
+        </button>
 
         {/* Monitoring Grid */}
-        {activeStreams.filter(s => s.kind === 'video').length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {activeStreams.filter(s => s.kind === 'video').map((stream) => (
+        {count > 0 ? (
+          <div className={`flex-1 min-h-0 grid ${gridColsClass} gap-6`}>
+            {videoStreams.map((stream) => (
               <StreamCard key={stream.producerId} streamInfo={stream} />
             ))}
           </div>
