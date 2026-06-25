@@ -185,7 +185,7 @@ function App() {
             <Shield size={22} className="text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight">TekTok</h1>
+            <h1 className="font-bold text-lg leading-tight">Hanoman Eye</h1>
             <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Monitoring System</p>
           </div>
         </div>
