@@ -1,10 +1,10 @@
-import * as mediasoup from 'mediasoup';
-import dotenv from 'dotenv';
-import fs from 'fs';
+import * as mediasoup from "mediasoup";
+import dotenv from "dotenv";
+import fs from "fs";
 
 dotenv.config();
-if (fs.existsSync('.env.local')) {
-  const envConfig = dotenv.parse(fs.readFileSync('.env.local'));
+if (fs.existsSync(".env.local")) {
+  const envConfig = dotenv.parse(fs.readFileSync(".env.local"));
   for (const k in envConfig) {
     process.env[k] = envConfig[k];
   }
@@ -13,33 +13,26 @@ if (fs.existsSync('.env.local')) {
 const config = {
   // Worker settings
   worker: {
-    rtcMinPort: parseInt(process.env.MEDIASOUP_MIN_PORT || '10000', 10),
-    rtcMaxPort: parseInt(process.env.MEDIASOUP_MAX_PORT || '10100', 10),
-    logLevel: 'warn',
-    logTags: [
-      'info',
-      'ice',
-      'dtls',
-      'rtp',
-      'srtp',
-      'rtcp',
-    ],
+    rtcMinPort: parseInt(process.env.MEDIASOUP_MIN_PORT || "10000", 10),
+    rtcMaxPort: parseInt(process.env.MEDIASOUP_MAX_PORT || "10100", 10),
+    logLevel: "warn",
+    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
   },
   // Router settings
   router: {
     mediaCodecs: [
       {
-        kind: 'audio',
-        mimeType: 'audio/opus',
+        kind: "audio",
+        mimeType: "audio/opus",
         clockRate: 48000,
         channels: 2,
       },
       {
-        kind: 'video',
-        mimeType: 'video/VP8',
+        kind: "video",
+        mimeType: "video/VP8",
         clockRate: 90000,
         parameters: {
-          'x-google-start-bitrate': 1000,
+          "x-google-start-bitrate": 1000,
         },
       },
     ],
@@ -62,8 +55,11 @@ export const createWorker = async () => {
     rtcMaxPort: config.worker.rtcMaxPort,
   });
 
-  worker.on('died', () => {
-    console.error('mediasoup worker died, exiting in 2 seconds... [pid:%d]', worker.pid);
+  worker.on("died", () => {
+    console.error(
+      "mediasoup worker died, exiting in 2 seconds... [pid:%d]",
+      worker.pid,
+    );
     setTimeout(() => process.exit(1), 2000);
   });
 
@@ -75,39 +71,34 @@ export const createRouter = async () => {
 };
 
 export const createWebRtcTransport = async (router) => {
-  const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || '127.0.0.1';
-  const listenIp = process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0';
+  const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || "127.0.0.1";
+  const listenIp = process.env.MEDIASOUP_LISTEN_IP || "0.0.0.0";
 
-  const listenIps = [
-    {
-      ip: '127.0.0.1',
-      announcedIp: '127.0.0.1',
-    }
-  ];
+  // Production (public server): bind to all interfaces, announce the public IP.
+  // Local dev: loopback only.
+  // NOTE: never bind ip '127.0.0.1' while announcing a public IP — that creates a
+  // black-hole ICE candidate (remote browser sends to the public IP but the socket
+  // only listens on loopback) and causes "Recv transport connection state: failed".
+  const listenIps =
+    announcedIp === "127.0.0.1"
+      ? [{ ip: "127.0.0.1", announcedIp: "127.0.0.1" }]
+      : [{ ip: listenIp, announcedIp: announcedIp }];
 
-  // If the announced IP is not loopback, add it as a listener as well
-  if (announcedIp !== '127.0.0.1') {
-    listenIps.push({
-      ip: listenIp,
-      announcedIp: announcedIp,
-    });
-  }
-
-  console.log('Creating WebRtcTransport with listenIps:', listenIps);
+  console.log("Creating WebRtcTransport with listenIps:", listenIps);
 
   const transport = await router.createWebRtcTransport({
     ...config.webRtcTransport,
     listenIps,
   });
 
-  transport.on('dtlsstatechange', (dtlsState) => {
-    if (dtlsState === 'closed') {
+  transport.on("dtlsstatechange", (dtlsState) => {
+    if (dtlsState === "closed") {
       transport.close();
     }
   });
 
-  transport.on('close', () => {
-    console.log('transport closed');
+  transport.on("close", () => {
+    console.log("transport closed");
   });
 
   return transport;

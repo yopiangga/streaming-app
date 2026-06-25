@@ -1,0 +1,248 @@
+================================================================================
+ SETUP SERVER STREAMING (mediasoup) DI UBUNTU BARU
+ Project : like-tiktok  ->  folder "server" saja
+ Domain  : stream.mogiro.site
+ IP Publik: 10.20.211.23   (GANTI sesuai IP publik VPS kamu)
+ Stack   : Node.js + Express + Socket.IO + mediasoup (WebRTC SFU)
+================================================================================
+
+CATATAN PENTING (baca dulu):
+- Sinyal (Socket.IO / port 4000) lewat Nginx + HTTPS (wss).
+- Media WebRTC (audio/video) TIDAK lewat Nginx. Media mengalir langsung
+  via UDP ke IP publik di port 10000-10100. Jadi:
+    * MEDIASOUP_ANNOUNCED_IP HARUS = IP publik (10.20.211.23)
+    * Firewall WAJIB buka UDP/TCP 10000-10100
+- Browser butuh HTTPS untuk akses kamera/mic, jadi domain + SSL itu wajib.
+
+Jalankan perintah BERURUTAN. Login sebagai user yang punya akses sudo.
+
+--------------------------------------------------------------------------------
+ LANGKAH 0 — (LAKUKAN DULU) Arahkan DNS domain ke IP publik
+--------------------------------------------------------------------------------
+Di panel DNS (mis. Cloudflare/registrar) buat record:
+
+   Type: A
+   Name: stream            (artinya stream.mogiro.site)
+   Value: 10.20.211.23     (IP publik VPS)
+   Proxy: OFF / DNS only   (PENTING untuk Cloudflare, jangan diawan oranyekan,
+                            supaya UDP WebRTC tembus ke IP asli)
+
+Cek propagasi (tunggu sampai mengarah ke IP-mu):
+   dig +short stream.mogiro.site
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 1 — Update sistem & tools dasar
+--------------------------------------------------------------------------------
+sudo apt update && sudo apt -y upgrade
+sudo apt -y install git curl build-essential python3 python3-pip ufw
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 2 — Install Node.js 20 LTS (lewat NodeSource)
+--------------------------------------------------------------------------------
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt -y install nodejs
+
+# Verifikasi:
+node -v        # harus v20.x
+npm -v
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 3 — Ambil source code project
+--------------------------------------------------------------------------------
+# OPSI A: clone dari git (ganti URL repo kamu)
+cd ~
+git clone <URL_REPO_GIT> like-tiktok
+
+# OPSI B: kalau upload manual dari laptop, jalankan DI LAPTOP (bukan di server):
+#   scp -r "like-tiktok" user@10.20.211.23:~/like-tiktok
+#   (lalu lanjut langkah berikut di server)
+
+cd ~/like-tiktok/server
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 4 — Konfigurasi environment (.env.local) untuk server
+--------------------------------------------------------------------------------
+# Buat file .env.local di dalam folder server.
+# GANTI 10.20.211.23 dengan IP publik VPS kamu.
+
+cat > ~/like-tiktok/server/.env.local <<'EOF'
+PORT=4000
+NODE_ENV=production
+
+# Dengarkan di semua interface
+MEDIASOUP_LISTEN_IP=0.0.0.0
+
+# WAJIB diisi IP PUBLIK VPS (bukan 127.0.0.1)
+MEDIASOUP_ANNOUNCED_IP=10.20.211.23
+
+# Rentang port media WebRTC (harus dibuka di firewall)
+MEDIASOUP_MIN_PORT=10000
+MEDIASOUP_MAX_PORT=10100
+EOF
+
+cat ~/like-tiktok/server/.env.local   # cek isinya
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 5 — Install dependency server
+--------------------------------------------------------------------------------
+cd ~/like-tiktok/server
+npm install
+
+# (opsional) tes jalan manual dulu, harus muncul "Server listening on port 4000"
+# node index.js
+# tekan CTRL+C untuk berhenti, lalu lanjut pakai PM2 di Langkah 6.
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 6 — Jalankan server sebagai service dengan PM2 (auto-restart)
+--------------------------------------------------------------------------------
+sudo npm install -g pm2
+
+cd ~/like-tiktok/server
+pm2 start index.js --name stream-server
+
+# Auto start saat VPS reboot:
+pm2 save
+pm2 startup systemd -u $USER --hp $HOME
+# ^ perintah di atas akan mencetak satu baris "sudo env PATH=... pm2 startup ..."
+#   COPY & jalankan baris itu, lalu:
+pm2 save
+
+# Cek status & log:
+pm2 status
+pm2 logs stream-server --lines 50
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 7 — Firewall (UFW)
+--------------------------------------------------------------------------------
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# Port media WebRTC (WAJIB) - UDP & TCP
+sudo ufw allow 10000:10100/udp
+sudo ufw allow 10000:10100/tcp
+
+sudo ufw --force enable
+sudo ufw status verbose
+
+# CATATAN: Kalau VPS punya firewall/Security Group eksternal (AWS/GCP/Azure/
+# Cloud provider), buka juga port yang sama di panel mereka:
+#   TCP 80, TCP 443, UDP 10000-10100, TCP 10000-10100
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 8 — Install & konfigurasi Nginx (reverse proxy ke port 4000)
+--------------------------------------------------------------------------------
+sudo apt -y install nginx
+
+sudo tee /etc/nginx/sites-available/stream.mogiro.site > /dev/null <<'EOF'
+server {
+    listen 80;
+    server_name stream.mogiro.site;
+
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+
+        # Wajib untuk WebSocket / Socket.IO
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+}
+EOF
+
+# Aktifkan site & matikan default:
+sudo ln -sf /etc/nginx/sites-available/stream.mogiro.site /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Tes konfigurasi & reload:
+sudo nginx -t
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 9 — Pasang SSL (HTTPS) gratis via Let's Encrypt / Certbot
+--------------------------------------------------------------------------------
+# Pastikan DNS (Langkah 0) sudah mengarah ke IP ini sebelum lanjut.
+sudo apt -y install certbot python3-certbot-nginx
+
+sudo certbot --nginx -d stream.mogiro.site --non-interactive --agree-tos -m projekin.ajaa@gmail.com --redirect
+
+# Certbot otomatis menambah blok HTTPS (443) ke config Nginx & redirect 80->443.
+# Tes auto-renew:
+sudo certbot renew --dry-run
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 10 — Verifikasi dari luar
+--------------------------------------------------------------------------------
+# 1) Endpoint REST (harus balas JSON):
+curl https://stream.mogiro.site/streams
+
+# 2) Cek server jalan:
+pm2 status
+pm2 logs stream-server
+
+# 3) Dari browser buka:  https://stream.mogiro.site/streams
+#    -> harus muncul: {"message":"Use Socket.IO to get active streams..."}
+
+# 4) Client app (admin/screen/client) cukup arahkan koneksi Socket.IO ke:
+#       https://stream.mogiro.site
+#    (bukan ip:port langsung). Media WebRTC akan otomatis ke 10.20.211.23 UDP.
+
+
+================================================================================
+ PERINTAH OPERASIONAL HARIAN
+================================================================================
+pm2 status                       # lihat status
+pm2 logs stream-server           # lihat log realtime
+pm2 restart stream-server        # restart setelah update code
+pm2 stop stream-server           # stop
+pm2 start stream-server          # start
+
+# Update code lalu restart:
+cd ~/like-tiktok && git pull && cd server && npm install && pm2 restart stream-server
+
+
+================================================================================
+ TROUBLESHOOTING
+================================================================================
+- Video/stream tidak muncul tapi koneksi socket OK:
+    -> Hampir pasti masalah MEDIASOUP_ANNOUNCED_IP atau firewall UDP 10000-10100.
+    -> Pastikan .env.local berisi IP PUBLIK, dan port UDP terbuka (ufw + panel cloud).
+    -> Kalau pakai Cloudflare, set DNS ke "DNS only" (abu-abu), bukan proxied.
+
+- 502 Bad Gateway di Nginx:
+    -> Server Node mati. Cek: pm2 logs stream-server
+
+- Cek port 4000 listen:
+    sudo ss -tlnp | grep 4000
+
+- Cek mediasoup buka port UDP saat ada stream:
+    sudo ss -ulnp | grep -E '1000[0-9]|100[0-9][0-9]'
+
+- Nginx error config:
+    sudo nginx -t
+    sudo tail -f /var/log/nginx/error.log
+================================================================================
+
+
+ip : 31.97.66.220
+root
+Ur@i-7dnLl&TfK4ULtH4
