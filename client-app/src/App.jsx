@@ -2,11 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import { Camera, Video, VideoOff, Users, MessageCircle, Share2, Heart, MoreHorizontal, X, SwitchCamera } from 'lucide-react';
 import useStreamStore from './store/useStreamStore';
 import { useMediasoup } from './hooks/useMediasoup';
+import LiveComments from './components/LiveComments';
+import UploadIndicator from './components/UploadIndicator';
 
 function App() {
   const videoRef = useRef(null);
   const { isLive, stream, status, viewerCount, streamerName, setStreamerName } = useStreamStore();
-  const { startStream, stopStream, switchCamera } = useMediasoup();
+  const { startStream, stopStream, switchCamera, videoProducerRef, audioProducerRef } = useMediasoup();
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -78,23 +80,17 @@ function App() {
           </div>
         )}
 
+        {/* Internet strength (upload) indicator */}
+        {isLive && (
+          <div className="absolute top-16 right-4 z-10">
+            <UploadIndicator videoRef={videoProducerRef} audioRef={audioProducerRef} />
+          </div>
+        )}
+
         {/* Bottom Overlay Controls */}
         <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 flex flex-col gap-4 z-10 bg-gradient-to-t from-black/80 to-transparent">
-          {/* Chat Mockup */}
-          <div className="flex flex-col gap-2 max-h-[150px] overflow-hidden pointer-events-none opacity-80">
-             <div className="flex gap-2 items-start">
-               <span className="text-[11px] font-bold text-pink-400">Viewer1:</span>
-               <span className="text-[11px]">Wow, cool stream! 🔥</span>
-             </div>
-             <div className="flex gap-2 items-start">
-               <span className="text-[11px] font-bold text-blue-400">CoolGuy:</span>
-               <span className="text-[11px]">How do you do this?</span>
-             </div>
-             <div className="flex gap-2 items-start">
-               <span className="text-[11px] font-bold text-yellow-400">Admin:</span>
-               <span className="text-[11px]">Welcome to the live session!</span>
-             </div>
-          </div>
+          {/* Live Chat (animated mock feed) */}
+          <LiveComments />
 
           <div className="flex justify-between items-end gap-4">
             <div className="flex-1">

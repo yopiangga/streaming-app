@@ -247,5 +247,5 @@ export const useMediasoup = () => {
     }
   };
 
-  return { startStream, stopStream, switchCamera };
+  return { startStream, stopStream, switchCamera, videoProducerRef, audioProducerRef };
 };

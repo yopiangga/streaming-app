@@ -22,3 +22,20 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+/* Live comment entrance: rise up + fade in (TikTok-style chat) */
+@keyframes commentIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-comment-in {
+  animation: commentIn 0.35s ease-out both;
+  will-change: transform, opacity;
+}

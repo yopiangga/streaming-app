@@ -1,41 +1,58 @@
 ================================================================================
- SETUP SERVER STREAMING (mediasoup) DI UBUNTU BARU
- Project : like-tiktok  ->  folder "server" saja
- Domain  : stream.mogiro.site
- IP Publik: 10.20.211.23   (GANTI sesuai IP publik VPS kamu)
- Stack   : Node.js + Express + Socket.IO + mediasoup (WebRTC SFU)
+ SETUP SERVER STREAMING (mediasoup SFU) DI UBUNTU — like-tiktok / "Hanoman Eye"
+ Yang dideploy : folder "server" saja
+ Contoh production : domain stream2.mogiro.site  ->  IP publik 31.97.66.220
+ Stack         : Node.js + Express + Socket.IO + mediasoup (WebRTC SFU)
+ Path deploy   : /var/www/streaming-app   (boleh diganti sesuai selera)
 ================================================================================
 
-CATATAN PENTING (baca dulu):
-- Sinyal (Socket.IO / port 4000) lewat Nginx + HTTPS (wss).
-- Media WebRTC (audio/video) TIDAK lewat Nginx. Media mengalir langsung
-  via UDP ke IP publik di port 10000-10100. Jadi:
-    * MEDIASOUP_ANNOUNCED_IP HARUS = IP publik (10.20.211.23)
-    * Firewall WAJIB buka UDP/TCP 10000-10100
-- Browser butuh HTTPS untuk akses kamera/mic, jadi domain + SSL itu wajib.
+BACA DULU — ARSITEKTUR & 2 PELAJARAN PENTING
+--------------------------------------------------------------------------------
+1) Sinyal (Socket.IO) jalan di port 4000 -> dibungkus Nginx + HTTPS (wss/443).
+2) Media WebRTC (audio/video) TIDAK lewat Nginx. Media mengalir LANGSUNG via UDP
+   ke IP publik server pada "RTC port range". Maka:
+     * MEDIASOUP_ANNOUNCED_IP HARUS = IP publik server (BUKAN 127.0.0.1).
+     * Firewall WAJIB membuka rentang UDP RTC tsb.
+
+   >>> PELAJARAN #1 (infra / paling sering bikin "Recv transport ... failed"):
+       Sebagian provider DIAM-DIAM memblokir inbound UDP pada rentang port
+       tertentu di level JARINGAN (sebelum paket sampai ke VM). UFW di server
+       bisa kelihatan benar tapi percuma.
+       FAKTA di Hostinger (31.97.66.220): UDP 10000-10100 DIBLOKIR,
+       sedangkan 40000-49999 TERBUKA. Karena itu panduan ini memakai 40000-49999.
+       => SELALU jalankan tes keterjangkauan UDP (LANGKAH 8) sebelum percaya
+          sebuah rentang port.
+
+   >>> PELAJARAN #2 (kode): di server/mediasoup.js, JANGAN pernah membuat
+       listenIps yang bind ip:'127.0.0.1' tapi announce IP publik. Itu jadi
+       "black-hole ICE candidate". Versi benar hanya announce IP publik di
+       0.0.0.0 (kode di repo sudah betul, jangan diutak-atik manual di server).
+
+3) Browser butuh HTTPS untuk akses kamera/mic, jadi domain + SSL itu wajib.
 
 Jalankan perintah BERURUTAN. Login sebagai user yang punya akses sudo.
+
 
 --------------------------------------------------------------------------------
  LANGKAH 0 — (LAKUKAN DULU) Arahkan DNS domain ke IP publik
 --------------------------------------------------------------------------------
-Di panel DNS (mis. Cloudflare/registrar) buat record:
+Di panel DNS (Cloudflare/registrar) buat record A:
 
    Type: A
-   Name: stream            (artinya stream.mogiro.site)
-   Value: 10.20.211.23     (IP publik VPS)
-   Proxy: OFF / DNS only   (PENTING untuk Cloudflare, jangan diawan oranyekan,
-                            supaya UDP WebRTC tembus ke IP asli)
+   Name: stream2              (artinya stream2.mogiro.site)
+   Value: 31.97.66.220        (IP publik VPS)
+   Proxy: OFF / DNS only      (PENTING di Cloudflare: jangan diproxy/awan oranye,
+                               supaya UDP WebRTC tembus ke IP asli)
 
 Cek propagasi (tunggu sampai mengarah ke IP-mu):
-   dig +short stream.mogiro.site
+   dig +short stream2.mogiro.site
 
 
 --------------------------------------------------------------------------------
  LANGKAH 1 — Update sistem & tools dasar
 --------------------------------------------------------------------------------
 sudo apt update && sudo apt -y upgrade
-sudo apt -y install git curl build-essential python3 python3-pip ufw
+sudo apt -y install git curl build-essential python3 python3-pip ufw tcpdump netcat-openbsd
 
 
 --------------------------------------------------------------------------------
@@ -44,32 +61,35 @@ sudo apt -y install git curl build-essential python3 python3-pip ufw
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt -y install nodejs
 
-# Verifikasi:
-node -v        # harus v20.x
+# Verifikasi (Node 20 atau 22 sama-sama OK):
+node -v
 npm -v
 
 
 --------------------------------------------------------------------------------
  LANGKAH 3 — Ambil source code project
 --------------------------------------------------------------------------------
+sudo mkdir -p /var/www
+sudo chown -R $USER:$USER /var/www
+
 # OPSI A: clone dari git (ganti URL repo kamu)
-cd ~
-git clone <URL_REPO_GIT> like-tiktok
+git clone <URL_REPO_GIT> /var/www/streaming-app
 
-# OPSI B: kalau upload manual dari laptop, jalankan DI LAPTOP (bukan di server):
-#   scp -r "like-tiktok" user@10.20.211.23:~/like-tiktok
-#   (lalu lanjut langkah berikut di server)
+# OPSI B: kalau upload manual dari laptop, jalankan DI LAPTOP:
+#   scp -r "like-tiktok" user@31.97.66.220:/var/www/streaming-app
 
-cd ~/like-tiktok/server
+cd /var/www/streaming-app/server
 
 
 --------------------------------------------------------------------------------
- LANGKAH 4 — Konfigurasi environment (.env.local) untuk server
+ LANGKAH 4 — Konfigurasi environment (.env) untuk server
 --------------------------------------------------------------------------------
-# Buat file .env.local di dalam folder server.
-# GANTI 10.20.211.23 dengan IP publik VPS kamu.
+# GANTI 31.97.66.220 dengan IP PUBLIK VPS kamu.
+# Rentang port media 40000-49999 dipakai karena terbukti tembus di Hostinger.
+# (kalau provider lain, tes dulu di LANGKAH 8; boleh ganti rentang asal konsisten
+#  dengan rule firewall di LANGKAH 7.)
 
-cat > ~/like-tiktok/server/.env.local <<'EOF'
+cat > /var/www/streaming-app/server/.env <<'EOF'
 PORT=4000
 NODE_ENV=production
 
@@ -77,25 +97,24 @@ NODE_ENV=production
 MEDIASOUP_LISTEN_IP=0.0.0.0
 
 # WAJIB diisi IP PUBLIK VPS (bukan 127.0.0.1)
-MEDIASOUP_ANNOUNCED_IP=10.20.211.23
+MEDIASOUP_ANNOUNCED_IP=31.97.66.220
 
-# Rentang port media WebRTC (harus dibuka di firewall)
-MEDIASOUP_MIN_PORT=10000
-MEDIASOUP_MAX_PORT=10100
+# Rentang port media WebRTC (UDP) — harus dibuka di firewall & terjangkau internet
+MEDIASOUP_MIN_PORT=40000
+MEDIASOUP_MAX_PORT=49999
 EOF
 
-cat ~/like-tiktok/server/.env.local   # cek isinya
+cat /var/www/streaming-app/server/.env   # cek isinya
 
 
 --------------------------------------------------------------------------------
  LANGKAH 5 — Install dependency server
 --------------------------------------------------------------------------------
-cd ~/like-tiktok/server
+cd /var/www/streaming-app/server
 npm install
 
-# (opsional) tes jalan manual dulu, harus muncul "Server listening on port 4000"
-# node index.js
-# tekan CTRL+C untuk berhenti, lalu lanjut pakai PM2 di Langkah 6.
+# (opsional) tes manual: harus muncul "Server listening on port 4000"
+# node index.js   (CTRL+C untuk berhenti)
 
 
 --------------------------------------------------------------------------------
@@ -103,13 +122,13 @@ npm install
 --------------------------------------------------------------------------------
 sudo npm install -g pm2
 
-cd ~/like-tiktok/server
+cd /var/www/streaming-app/server
 pm2 start index.js --name stream-server
 
 # Auto start saat VPS reboot:
 pm2 save
 pm2 startup systemd -u $USER --hp $HOME
-# ^ perintah di atas akan mencetak satu baris "sudo env PATH=... pm2 startup ..."
+# ^ akan mencetak satu baris "sudo env PATH=... pm2 startup ...".
 #   COPY & jalankan baris itu, lalu:
 pm2 save
 
@@ -125,27 +144,57 @@ sudo ufw allow OpenSSH
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 
-# Port media WebRTC (WAJIB) - UDP & TCP
-sudo ufw allow 10000:10100/udp
-sudo ufw allow 10000:10100/tcp
+# Port media WebRTC (WAJIB) - UDP (rentang yang dipakai di .env)
+sudo ufw allow 40000:49999/udp
 
 sudo ufw --force enable
 sudo ufw status verbose
 
-# CATATAN: Kalau VPS punya firewall/Security Group eksternal (AWS/GCP/Azure/
-# Cloud provider), buka juga port yang sama di panel mereka:
-#   TCP 80, TCP 443, UDP 10000-10100, TCP 10000-10100
+# CATATAN: Kalau provider punya firewall/Security Group EKSTERNAL (panel cloud),
+# buka juga UDP 40000-49999 di sana. Lihat LANGKAH 8 untuk MEMASTIKAN benar2 tembus.
 
 
 --------------------------------------------------------------------------------
- LANGKAH 8 — Install & konfigurasi Nginx (reverse proxy ke port 4000)
+ LANGKAH 8 — *** WAJIB *** Tes keterjangkauan UDP dari internet
+--------------------------------------------------------------------------------
+# Ini langkah yang menyelamatkan kita dari "Recv transport ... failed".
+# Kita buktikan paket UDP dari luar BENAR-BENAR sampai ke server pada rentang RTC.
+
+# (a) DI SERVER — jalankan listener UDP sementara di salah satu port rentang:
+cat > /tmp/udptest.js <<'JS'
+const dgram = require('dgram');
+const s = dgram.createSocket('udp4');
+s.on('message', (m, r) => console.log(`GOT ${m.length}B from ${r.address}:${r.port}: ${m}`));
+s.on('listening', () => console.log('listening on', s.address()));
+s.bind(45000, '0.0.0.0');
+JS
+node /tmp/udptest.js
+#   (biarkan jalan; jangan ditutup dulu)
+
+# (b) DARI LAPTOP/HP (jaringan lain) — kirim paket UDP ke server:
+#     printf 'hello' | nc -u -w1 31.97.66.220 45000
+#   (kirim 3-4x)
+
+# HASIL:
+#   - Server mencetak "GOT 5B from <ip>..."  => UDP rentang ini TEMBUS. Lanjut.
+#   - Server DIAM (tidak ada GOT)            => provider memblokir rentang ini.
+#         -> coba rentang lain (mis. 40000-49999 sudah ok di Hostinger), atau
+#         -> buka/whitelist port di panel firewall provider / hubungi support.
+#   Tutup listener: CTRL+C. Hapus: rm /tmp/udptest.js
+
+# Pastikan rentang yang TERBUKTI tembus = rentang di .env (MEDIASOUP_MIN/MAX_PORT)
+# = rule UFW (LANGKAH 7). Tiga tempat ini harus konsisten.
+
+
+--------------------------------------------------------------------------------
+ LANGKAH 9 — Install & konfigurasi Nginx (reverse proxy ke port 4000)
 --------------------------------------------------------------------------------
 sudo apt -y install nginx
 
-sudo tee /etc/nginx/sites-available/stream.mogiro.site > /dev/null <<'EOF'
+sudo tee /etc/nginx/sites-available/stream2.mogiro.site > /dev/null <<'EOF'
 server {
     listen 80;
-    server_name stream.mogiro.site;
+    server_name stream2.mogiro.site;
 
     location / {
         proxy_pass http://127.0.0.1:4000;
@@ -166,45 +215,47 @@ server {
 }
 EOF
 
-# Aktifkan site & matikan default:
-sudo ln -sf /etc/nginx/sites-available/stream.mogiro.site /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/stream2.mogiro.site /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
-# Tes konfigurasi & reload:
 sudo nginx -t
 sudo systemctl restart nginx
 sudo systemctl enable nginx
 
 
 --------------------------------------------------------------------------------
- LANGKAH 9 — Pasang SSL (HTTPS) gratis via Let's Encrypt / Certbot
+ LANGKAH 10 — Pasang SSL (HTTPS) gratis via Let's Encrypt / Certbot
 --------------------------------------------------------------------------------
-# Pastikan DNS (Langkah 0) sudah mengarah ke IP ini sebelum lanjut.
+# Pastikan DNS (LANGKAH 0) sudah mengarah ke IP ini sebelum lanjut.
 sudo apt -y install certbot python3-certbot-nginx
 
-sudo certbot --nginx -d stream.mogiro.site --non-interactive --agree-tos -m projekin.ajaa@gmail.com --redirect
+sudo certbot --nginx -d stream2.mogiro.site --non-interactive --agree-tos -m projekin.ajaa@gmail.com --redirect
 
-# Certbot otomatis menambah blok HTTPS (443) ke config Nginx & redirect 80->443.
 # Tes auto-renew:
 sudo certbot renew --dry-run
 
 
 --------------------------------------------------------------------------------
- LANGKAH 10 — Verifikasi dari luar
+ LANGKAH 11 — Verifikasi dari luar
 --------------------------------------------------------------------------------
 # 1) Endpoint REST (harus balas JSON):
-curl https://stream.mogiro.site/streams
+curl https://stream2.mogiro.site/streams
+#    -> {"message":"Use Socket.IO to get active streams for real-time updates"}
 
-# 2) Cek server jalan:
+# 2) Server jalan:
 pm2 status
 pm2 logs stream-server
 
-# 3) Dari browser buka:  https://stream.mogiro.site/streams
-#    -> harus muncul: {"message":"Use Socket.IO to get active streams..."}
+# 3) Saat ada stream, transport HARUS hanya announce IP publik di 0.0.0.0:
+#    Creating WebRtcTransport with listenIps: [ { ip: '0.0.0.0', announcedIp: '31.97.66.220' } ]
+#    (kalau muncul entri ip:'127.0.0.1' -> kode di server sudah salah diedit, lihat PELAJARAN #2)
 
-# 4) Client app (admin/screen/client) cukup arahkan koneksi Socket.IO ke:
-#       https://stream.mogiro.site
-#    (bukan ip:port langsung). Media WebRTC akan otomatis ke 10.20.211.23 UDP.
+# 4) Saat ada viewer, port media harus listen di rentang RTC:
+sudo ss -ulnp | grep -E ':4[0-9]{4}'
+
+# 5) Client app (admin/screen/client) arahkan Socket.IO ke:
+#       https://stream2.mogiro.site
+#    Media WebRTC otomatis ke 31.97.66.220 UDP 40000-49999.
 
 
 ================================================================================
@@ -213,36 +264,39 @@ pm2 logs stream-server
 pm2 status                       # lihat status
 pm2 logs stream-server           # lihat log realtime
 pm2 restart stream-server        # restart setelah update code
-pm2 stop stream-server           # stop
-pm2 start stream-server          # start
+pm2 stop stream-server
+pm2 start stream-server
 
 # Update code lalu restart:
-cd ~/like-tiktok && git pull && cd server && npm install && pm2 restart stream-server
+cd /var/www/streaming-app && git pull && cd server && npm install && pm2 restart stream-server
 
 
 ================================================================================
  TROUBLESHOOTING
 ================================================================================
-- Video/stream tidak muncul tapi koneksi socket OK:
-    -> Hampir pasti masalah MEDIASOUP_ANNOUNCED_IP atau firewall UDP 10000-10100.
-    -> Pastikan .env.local berisi IP PUBLIK, dan port UDP terbuka (ufw + panel cloud).
-    -> Kalau pakai Cloudflare, set DNS ke "DNS only" (abu-abu), bukan proxied.
+- Client log "Recv transport connection state: failed" / video hitam tapi socket OK:
+    => Hampir pasti masalah MEDIA UDP, BUKAN sinyal. Urutan cek:
+    1. MEDIASOUP_ANNOUNCED_IP di .env = IP publik? (bukan 127.0.0.1)
+    2. Log transport announce 0.0.0.0 + IP publik saja? (lihat PELAJARAN #2)
+    3. *** Rentang UDP benar-benar tembus dari internet? *** -> ulangi LANGKAH 8.
+       Ini penyebab utama di Hostinger: 10000-10100 diblokir, 40000-49999 tembus.
+    4. UFW & panel firewall provider sudah buka rentang yang sama dengan .env?
+    5. Cloudflare: A record harus "DNS only" (abu-abu), bukan proxied.
 
 - 502 Bad Gateway di Nginx:
     -> Server Node mati. Cek: pm2 logs stream-server
 
-- Cek port 4000 listen:
-    sudo ss -tlnp | grep 4000
+- Cek port 4000 listen:        sudo ss -tlnp | grep 4000
+- Cek port media saat streaming: sudo ss -ulnp | grep -E ':4[0-9]{4}'
+- Nginx error config:          sudo nginx -t ; sudo tail -f /var/log/nginx/error.log
 
-- Cek mediasoup buka port UDP saat ada stream:
-    sudo ss -ulnp | grep -E '1000[0-9]|100[0-9][0-9]'
-
-- Nginx error config:
-    sudo nginx -t
-    sudo tail -f /var/log/nginx/error.log
+- Tes cepat UDP tembus/tidak (paling menentukan): ulangi LANGKAH 8.
 ================================================================================
 
-
-ip : 31.97.66.220
-root
-Ur@i-7dnLl&TfK4ULtH4
+ INFO SERVER PRODUCTION SAAT INI
+ IP    : 31.97.66.220   (eth0 langsung, tanpa NAT)
+ Domain: stream2.mogiro.site
+ Path  : /var/www/streaming-app/server
+ PM2   : stream-server      Node: nvm v22 (/root/.nvm/versions/node/v22.18.0/bin)
+ RTC   : UDP 40000-49999    (10000-10100 DIBLOKIR Hostinger)
+================================================================================
